@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/*  PALETTE — edit only this block to swap the whole site's colors.    */
+/*  Current: "Botanik Orman" (emerald/lime + amber pop accent)         */
+/* ------------------------------------------------------------------ */
+:root {
+  --background: #081410;
+  --background-alt: #0d1a14;
+  --foreground: #f4faf6;
+
+  --accent: #34d399; /* primary — emerald */
+  --accent-light: #6ee7b7; /* lighter tint, gradients/decor */
+  --accent-deep: #10b981; /* deeper shade, blobs/scrollbar */
+
+  --accent-2: #a3e635; /* secondary — lime */
+  --accent-2-light: #bef264; /* lighter tint */
+
+  --pop: #fb923c; /* contrast accent — amber (Fen Bilimleri branch) */
+  --pop-light: #fdba74;
+}
+
+/* Light theme — same "Botanik Orman" identity, paper/botanical surface. */
+:root[data-theme="light"] {
+  --background: #f7faf5;
+  --background-alt: #eef3ea;
+  --foreground: #0b1812;
+
+  --accent: #059669;
+  --accent-light: #10b981;
+  --accent-deep: #047857;
+
+  --accent-2: #65a30d;
+  --accent-2-light: #84cc16;
+
+  --pop: #d97706;
+  --pop-light: #f59e0b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-alt: var(--background-alt);
+  --color-foreground: var(--foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-accent-deep: var(--accent-deep);
+
+  --color-accent-2: var(--accent-2);
+  --color-accent-2-light: var(--accent-2-light);
+
+  --color-pop: var(--pop);
+  --color-pop-light: var(--pop-light);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--background);
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--background);
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  overflow-x: hidden;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--foreground);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 9999px;
+}
+
+.noise-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
