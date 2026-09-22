@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import {
   motion,
   AnimatePresence,
@@ -846,79 +846,184 @@ function FloatingDecor({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Illustrated biology motifs — bigger, "picture-like" background art */
+/*  Illustrated biology motifs — single continuous-line "one-line       */
+/*  drawing" style, drawn on scroll via animated pathLength.           */
 /* ------------------------------------------------------------------ */
 
+function generateFlowerOutline(petalCount: number, innerR: number, outerR: number, steps = 240) {
+  const pts: string[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const theta = (i / steps) * Math.PI * 2;
+    const r = innerR + (outerR - innerR) * Math.pow((1 + Math.cos(petalCount * theta)) / 2, 0.55);
+    const x = 50 + r * Math.cos(theta);
+    const y = 50 + r * Math.sin(theta);
+    pts.push(`${x.toFixed(2)},${y.toFixed(2)}`);
+  }
+  return pts.join(" ");
+}
+
+const FLOWER_OUTLINE = generateFlowerOutline(6, 12, 34);
+
+/* Naturalistic leaf outline: a width-envelope profile from apex to base,
+   with a serration ripple (tapered to 0 at both tips) and a slightly
+   different ripple phase per side for organic asymmetry. */
+function generateLeafOutline(steps = 100) {
+  const teethFreq = 15;
+  const right: [number, number][] = [];
+  const left: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const v = i / steps;
+    const envelope = Math.sin(Math.PI * Math.pow(v, 0.8)) * 29;
+    const taper = Math.sin(Math.PI * v);
+    const y = 10 + v * 100;
+    const rightRipple = taper * 1.7 * Math.sin(v * teethFreq * Math.PI * 2);
+    const leftRipple = taper * 1.7 * Math.sin(v * teethFreq * Math.PI * 2 + 0.7);
+    right.push([50 + envelope + rightRipple, y]);
+    left.push([50 - envelope - leftRipple, y]);
+  }
+  const all = [...right, ...left.reverse()];
+  return all.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+}
+
+const LEAF_OUTLINE = generateLeafOutline();
+
+const drawIn = {
+  hidden: { pathLength: 0 },
+  visible: { pathLength: 1 },
+};
+
+const LEAF_VEINS = [
+  { y: 32, left: "M49 32 C40 28 32 22 26 16", right: "M51 32 C60 28 68 22 74 16", delay: 2.6 },
+  { y: 52, left: "M49 52 C38 50 27 46 19 40", right: "M51 52 C62 50 73 46 81 40", delay: 2.75 },
+  { y: 72, left: "M49 72 C40 72 30 70 22 66", right: "M51 72 C60 72 70 70 78 66", delay: 2.9 },
+  { y: 92, left: "M49 92 C43 94 37 94 31 92", right: "M51 92 C57 94 63 94 69 92", delay: 3.05 },
+];
+
 function LeafIllustration({ className }: { className?: string }) {
+  const gradId = useId();
   return (
     <svg
-      viewBox="0 0 100 140"
+      viewBox="0 0 100 150"
       className={className}
       fill="none"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path
-        d="M50 8 C72 14 88 40 82 68 C76 98 58 122 48 132 C36 118 22 92 20 64 C18 36 30 14 50 8 Z"
-        stroke="var(--accent)"
-        strokeOpacity="0.45"
-        strokeWidth="0.75"
-        fill="var(--accent)"
-        fillOpacity="0.03"
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--accent-light)" stopOpacity="0.5" />
+          <stop offset="55%" stopColor="var(--accent)" stopOpacity="0.32" />
+          <stop offset="100%" stopColor="var(--accent-deep)" stopOpacity="0.22" />
+        </linearGradient>
+      </defs>
+      {/* blade fill — fades in as the outline finishes drawing */}
+      <motion.polyline
+        points={LEAF_OUTLINE}
+        fill={`url(#${gradId})`}
+        stroke="none"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 0.12 }}
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 1, delay: 1.6, ease: "easeInOut" }}
       />
-      <path d="M50 12 C48 48 46 90 47 128" stroke="var(--accent)" strokeOpacity="0.4" strokeWidth="0.55" />
-      <path d="M48 32 C40 36 31 40 23 46" stroke="var(--accent)" strokeOpacity="0.28" strokeWidth="0.4" />
-      <path d="M49 32 C58 35 68 40 76 48" stroke="var(--accent)" strokeOpacity="0.28" strokeWidth="0.4" />
-      <path d="M47 57 C38 60 28 65 22 72" stroke="var(--accent)" strokeOpacity="0.28" strokeWidth="0.4" />
-      <path d="M48 57 C58 60 68 66 74 74" stroke="var(--accent)" strokeOpacity="0.28" strokeWidth="0.4" />
-      <path d="M47 82 C40 85 33 90 28 96" stroke="var(--accent)" strokeOpacity="0.25" strokeWidth="0.35" />
-      <path d="M48 82 C56 85 63 90 68 97" stroke="var(--accent)" strokeOpacity="0.25" strokeWidth="0.35" />
-      <path d="M48 103 C43 106 38 110 35 115" stroke="var(--accent)" strokeOpacity="0.2" strokeWidth="0.3" />
-      <path d="M48 103 C53 106 58 110 60 116" stroke="var(--accent)" strokeOpacity="0.2" strokeWidth="0.3" />
+      {/* blade outline — naturalistic serrated, asymmetric ovate leaf */}
+      <motion.polyline
+        points={LEAF_OUTLINE}
+        fill="none"
+        stroke="var(--accent)"
+        strokeOpacity="0.62"
+        strokeWidth="1"
+        variants={drawIn}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 2, ease: "easeInOut" }}
+      />
+      {/* petiole (stem) */}
+      <motion.path
+        d="M50 109 C49 118 51 129 50 140"
+        stroke="var(--accent)"
+        strokeOpacity="0.5"
+        strokeWidth="1"
+        variants={drawIn}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 0.6, delay: 1.9, ease: "easeInOut" }}
+      />
+      {/* midrib */}
+      <motion.path
+        d="M50 14 C50 45 50 80 50 106"
+        stroke="var(--accent)"
+        strokeOpacity="0.42"
+        strokeWidth="0.7"
+        variants={drawIn}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 1, delay: 2.2, ease: "easeInOut" }}
+      />
+      {/* pinnate side veins */}
+      {LEAF_VEINS.map((v) => (
+        <motion.path
+          key={`l-${v.y}`}
+          d={v.left}
+          stroke="var(--accent)"
+          strokeOpacity="0.3"
+          strokeWidth="0.45"
+          variants={drawIn}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.4, delay: v.delay, ease: "easeInOut" }}
+        />
+      ))}
+      {LEAF_VEINS.map((v) => (
+        <motion.path
+          key={`r-${v.y}`}
+          d={v.right}
+          stroke="var(--accent)"
+          strokeOpacity="0.3"
+          strokeWidth="0.45"
+          variants={drawIn}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.4, delay: v.delay, ease: "easeInOut" }}
+        />
+      ))}
     </svg>
   );
 }
 
 function FlowerIllustration({ className }: { className?: string }) {
-  const petals = [
-    { angle: 4, rx: 9, ry: 25 },
-    { angle: 61, rx: 8, ry: 22 },
-    { angle: 123, rx: 9.5, ry: 26 },
-    { angle: 178, rx: 7.5, ry: 21 },
-    { angle: 236, rx: 9, ry: 24 },
-    { angle: 298, rx: 8, ry: 22 },
-  ];
   return (
     <svg viewBox="0 0 100 100" className={className} fill="none" strokeLinecap="round" strokeLinejoin="round">
-      {petals.map((p, i) => (
-        <ellipse
-          key={i}
-          cx="50"
-          cy={50 - p.ry + 5}
-          rx={p.rx}
-          ry={p.ry}
-          stroke="var(--accent-2)"
-          strokeOpacity="0.38"
-          strokeWidth="0.55"
-          fill="var(--accent-2)"
-          fillOpacity="0.025"
-          transform={`rotate(${p.angle} 50 50)`}
-        />
-      ))}
-      {[10, 82, 154, 226, 298].map((deg, i) => (
-        <line
-          key={i}
-          x1="50"
-          y1="50"
-          x2="50"
-          y2="41"
-          stroke="var(--accent-2)"
-          strokeOpacity="0.32"
-          strokeWidth="0.4"
-          transform={`rotate(${deg} 50 50)`}
-        />
-      ))}
-      <circle cx="50" cy="50" r="3.5" fill="var(--pop)" fillOpacity="0.16" stroke="var(--pop)" strokeOpacity="0.4" strokeWidth="0.5" />
+      <motion.polyline
+        points={FLOWER_OUTLINE}
+        stroke="var(--accent-2)"
+        strokeOpacity="0.55"
+        strokeWidth="1.1"
+        variants={drawIn}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 2.6, ease: "easeInOut" }}
+      />
+      <motion.circle
+        cx="50"
+        cy="50"
+        r="3.5"
+        stroke="var(--pop)"
+        strokeOpacity="0.55"
+        strokeWidth="1"
+        fill="var(--pop)"
+        fillOpacity="0.12"
+        initial={{ scale: 0, opacity: 0 }}
+        whileInView={{ scale: 1, opacity: 1 }}
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 0.6, delay: 2.4, ease: EASE }}
+      />
     </svg>
   );
 }
@@ -933,55 +1038,50 @@ function ButterflyIllustration({ className }: { className?: string }) {
       strokeLinejoin="round"
       style={{ overflow: "visible" }}
     >
-      <motion.g
-        style={{ originX: 1, originY: 0.48 }}
-        animate={{ scaleX: [1, 0.85, 1] }}
-        transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <path
-          d="M50 46 C34 20 12 18 6 34 C2 46 14 56 34 54 C42 52 47 50 50 46 Z"
-          stroke="var(--accent)"
-          strokeOpacity="0.42"
-          strokeWidth="0.6"
-          fill="var(--accent)"
-          fillOpacity="0.035"
-        />
-        <path
-          d="M50 52 C38 50 22 54 18 66 C15 78 26 86 38 80 C46 76 49 64 50 52 Z"
-          stroke="var(--accent)"
-          strokeOpacity="0.34"
-          strokeWidth="0.5"
-          fill="var(--accent)"
-          fillOpacity="0.03"
-        />
-        <path d="M48 44 C38 35 25 30 12 31" stroke="var(--accent)" strokeOpacity="0.22" strokeWidth="0.3" />
-      </motion.g>
-      <motion.g
-        style={{ originX: 0, originY: 0.48 }}
-        animate={{ scaleX: [1, 0.85, 1] }}
-        transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <path
-          d="M50 46 C66 20 88 18 94 34 C98 46 86 56 66 54 C58 52 53 50 50 46 Z"
-          stroke="var(--accent)"
-          strokeOpacity="0.42"
-          strokeWidth="0.6"
-          fill="var(--accent)"
-          fillOpacity="0.035"
-        />
-        <path
-          d="M50 52 C62 50 78 54 82 66 C85 78 74 86 62 80 C54 76 51 64 50 52 Z"
-          stroke="var(--accent)"
-          strokeOpacity="0.34"
-          strokeWidth="0.5"
-          fill="var(--accent)"
-          fillOpacity="0.03"
-        />
-        <path d="M52 44 C62 35 75 30 88 31" stroke="var(--accent)" strokeOpacity="0.22" strokeWidth="0.3" />
-      </motion.g>
-      <path d="M50 37 C48 45 48 58 50 65" stroke="var(--accent)" strokeOpacity="0.5" strokeWidth="0.7" />
-      <path d="M50 37 C47 32 44 29 40 27" stroke="var(--accent)" strokeOpacity="0.4" strokeWidth="0.4" />
-      <path d="M50 37 C53 32 56 29 60 27" stroke="var(--accent)" strokeOpacity="0.4" strokeWidth="0.4" />
+      <motion.path
+        d="M50 50 C30 20 5 25 8 45 C10 62 30 60 50 50 C70 60 90 62 92 45 C95 25 70 20 50 50 Z"
+        stroke="var(--accent)"
+        strokeOpacity="0.55"
+        strokeWidth="1.2"
+        variants={drawIn}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 1.8, ease: "easeInOut" }}
+      />
+      <motion.path
+        d="M50 30 C47 45 47 65 50 80"
+        stroke="var(--accent)"
+        strokeOpacity="0.45"
+        strokeWidth="0.7"
+        variants={drawIn}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 0.7, delay: 1.6, ease: "easeInOut" }}
+      />
+      <motion.path
+        d="M50 30 C46 24 42 20 37 18"
+        stroke="var(--accent)"
+        strokeOpacity="0.4"
+        strokeWidth="0.5"
+        variants={drawIn}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 0.4, delay: 2.1, ease: "easeInOut" }}
+      />
+      <motion.path
+        d="M50 30 C54 24 58 20 63 18"
+        stroke="var(--accent)"
+        strokeOpacity="0.4"
+        strokeWidth="0.5"
+        variants={drawIn}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 0.4, delay: 2.1, ease: "easeInOut" }}
+      />
     </svg>
   );
 }
@@ -1164,8 +1264,9 @@ function About() {
     <section id="hakkimda" className="relative py-32 sm:py-40 px-6 overflow-hidden">
       <FloatingDecor icon={Microscope} className="top-24 right-[6%]" duration={11} delay={0.8} />
       <motion.div
-        animate={{ y: [0, -22, 0], rotate: [-4, 4, -4] }}
-        transition={{ duration: 16, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+        animate={{ rotate: [-3, 3, -3] }}
+        transition={{ duration: 7, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+        style={{ transformOrigin: "50% 100%" }}
         className="hidden md:block absolute -left-16 bottom-0 w-80 h-80 pointer-events-none"
       >
         <LeafIllustration className="w-full h-full" />
@@ -1809,12 +1910,13 @@ function ContactForm() {
 function Contact() {
   return (
     <section id="iletisim" className="relative py-32 sm:py-40 px-6">
-      <div className="max-w-5xl mx-auto grid md:grid-cols-[1.2fr_0.8fr] gap-16">
+      <div className="max-w-5xl mx-auto">
         <motion.div
           variants={fadeUpBig}
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
+          className="max-w-xl mb-10"
         >
           <AccentBar />
           <h2 className="text-3xl sm:text-5xl font-semibold tracking-tight">
@@ -1823,19 +1925,26 @@ function Contact() {
           <p className="mt-4 text-foreground/50 max-w-md">
             Biyoloji bazen karmaşık görünebilir. Birlikte çözelim.
           </p>
-          <div className="mt-10">
-            <ContactForm />
-          </div>
         </motion.div>
 
-        <motion.div
-          variants={staggerContainer(0.1, 0.15)}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          className="flex md:flex-col gap-4 md:justify-start"
-        >
-          {SOCIALS.map((social) => (
+        <div className="grid md:grid-cols-[1.2fr_0.8fr] gap-16">
+          <motion.div
+            variants={fadeUpBig}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+          >
+            <ContactForm />
+          </motion.div>
+
+          <motion.div
+            variants={staggerContainer(0.1, 0.15)}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            className="flex md:flex-col gap-4 md:justify-start"
+          >
+            {SOCIALS.map((social) => (
             <motion.a
               key={social.label}
               href={social.href}
@@ -1851,8 +1960,9 @@ function Contact() {
               </motion.span>
               {social.label}
             </motion.a>
-          ))}
-        </motion.div>
+            ))}
+          </motion.div>
+        </div>
       </div>
     </section>
   );
