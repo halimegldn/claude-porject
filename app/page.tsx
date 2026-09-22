@@ -12,7 +12,6 @@ import {
   useTransform,
   useInView,
   useScroll,
-  useVelocity,
   useAnimationFrame,
   useReducedMotion,
   useIsomorphicLayoutEffect,
@@ -117,10 +116,26 @@ const staggerContainer = (stagger = 0.15, delayChildren = 0): Variants => ({
 /*  Small math helpers                                                 */
 /* ------------------------------------------------------------------ */
 
-/** Wrap `value` into the [min, max) range — used by the looping marquee. */
-function wrap(min: number, max: number, value: number) {
-  const range = max - min;
-  return ((((value - min) % range) + range) % range) + min;
+/** Watches an element and reports visibility through a ref, so animation
+    loops can idle when their subject is off screen without re-rendering. */
+function useVisibilityRef<T extends Element>() {
+  const elementRef = useRef<T>(null);
+  const visible = useRef(true);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        visible.current = entry.isIntersecting;
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return { elementRef, visible };
 }
 
 /** Deterministic pseudo-random in [0,1). Rounded because Math.sin is only
@@ -453,15 +468,30 @@ function Preloader({ onDone }: { onDone: () => void }) {
     const start = performance.now();
     const total = 1500;
     let raf = 0;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      onDone();
+    };
     const tick = (now: number) => {
       /* Ease the counter out so it decelerates into 100 like a real load. */
       const t = Math.min((now - start) / total, 1);
       setProgress(Math.round((1 - Math.pow(1 - t, 3)) * 100));
       if (t < 1) raf = requestAnimationFrame(tick);
-      else setTimeout(onDone, 260);
+      else setTimeout(finish, 260);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+
+    /* Safety net: the counter rides requestAnimationFrame, which a paused
+       compositor can stall indefinitely. Nothing may ever leave the visitor
+       stuck behind an opaque overlay, so a timer force-finishes it. */
+    const failsafe = setTimeout(finish, 4000);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(failsafe);
+    };
   }, [onDone]);
 
   return (
@@ -557,6 +587,8 @@ function CustomCursor() {
   const [hovering, setHovering] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [visible, setVisible] = useState(false);
+  /* Elements opt into a labelled cursor with data-cursor-label="Oku". */
+  const [label, setLabel] = useState<string | null>(null);
 
   const x = useMotionValue(-200);
   const y = useMotionValue(-200);
@@ -575,6 +607,8 @@ function CustomCursor() {
       setHovering(
         !!target?.closest?.("a, button, input, textarea, [data-cursor='link']")
       );
+      const labelled = target?.closest?.("[data-cursor-label]") as HTMLElement | null;
+      setLabel(labelled?.dataset.cursorLabel ?? null);
     };
     const onLeave = () => setVisible(false);
     const onDown = () => setPressed(true);
@@ -599,22 +633,57 @@ function CustomCursor() {
     <>
       <motion.div
         style={{ x, y }}
-        animate={{ opacity: visible ? 1 : 0, scale: pressed ? 0.6 : hovering ? 0.4 : 1 }}
+        animate={{
+          opacity: visible && !label ? 1 : 0,
+          scale: pressed ? 0.6 : hovering ? 0.4 : 1,
+        }}
         transition={SPRING_SNAPPY}
         className="pointer-events-none fixed left-0 top-0 z-[95] -ml-[3px] -mt-[3px] h-1.5 w-1.5 rounded-full bg-accent mix-blend-difference"
       />
+
+      {/* The ring doubles as the label chip: over a labelled element it
+          inflates into a filled pill rather than spawning a second object. */}
       <motion.div
         style={{ x: ringX, y: ringY }}
         animate={{
           opacity: visible ? 1 : 0,
-          scale: pressed ? 0.85 : hovering ? 1.9 : 1,
-          borderColor: hovering
-            ? "rgb(from var(--accent-2) r g b / 80%)"
-            : "rgb(from var(--accent) r g b / 45%)",
+          scale: pressed ? 0.85 : label ? 1 : hovering ? 1.9 : 1,
         }}
         transition={{ type: "spring", stiffness: 260, damping: 24 }}
-        className="pointer-events-none fixed left-0 top-0 z-[94] -ml-4 -mt-4 h-8 w-8 rounded-full border"
-      />
+        className="pointer-events-none fixed left-0 top-0 z-[94]"
+      >
+        <motion.div
+          animate={{
+            width: label ? 84 : 32,
+            height: 32,
+            backgroundColor: label
+              ? "rgb(from var(--accent) r g b / 92%)"
+              : "rgb(from var(--accent) r g b / 0%)",
+            borderColor: label
+              ? "rgb(from var(--accent) r g b / 0%)"
+              : hovering
+                ? "rgb(from var(--accent-2) r g b / 80%)"
+                : "rgb(from var(--accent) r g b / 45%)",
+          }}
+          transition={{ type: "spring", stiffness: 320, damping: 30 }}
+          className="-ml-4 -mt-4 flex items-center justify-center overflow-hidden rounded-full border"
+        >
+          <AnimatePresence mode="wait">
+            {label && (
+              <motion.span
+                key={label}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: EASE }}
+                className="whitespace-nowrap text-[10px] font-medium tracking-[0.18em] text-background"
+              >
+                {label}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </motion.div>
     </>
   );
 }
@@ -716,8 +785,12 @@ function ParticleField({ className = "" }: { className?: string }) {
     let last = performance.now();
 
     const build = () => {
+      /* Scale the swarm to the machine as well as the viewport — a
+         4-core laptop should not be asked to push a desktop's count. */
+      const cores = navigator.hardwareConcurrency || 4;
+      const budget = cores <= 4 ? 45 : cores <= 8 ? 80 : 110;
       const count = Math.round(
-        Math.min(110, Math.max(36, (width * height) / 16000))
+        Math.min(budget, Math.max(28, (width * height) / 16000))
       );
       particles = Array.from({ length: count }, (_, i) => {
         const z = 0.25 + seeded(i * 3.1) * 0.75;
@@ -821,6 +894,7 @@ function helixNode(i: number, phase: number) {
 
 function Helix3D({ className }: { className?: string }) {
   const reduced = useReducedMotion();
+  const { elementRef, visible } = useVisibilityRef<SVGSVGElement>();
   const strandA = useRef<SVGPolylineElement>(null);
   const strandB = useRef<SVGPolylineElement>(null);
   const nodesA = useRef<(SVGCircleElement | null)[]>([]);
@@ -837,7 +911,7 @@ function Helix3D({ className }: { className?: string }) {
   }, [indices]);
 
   useAnimationFrame((t) => {
-    if (reduced) return;
+    if (reduced || !visible.current) return;
     const phase = (t / 1000) * 0.42;
     let pointsA = "";
     let pointsB = "";
@@ -879,6 +953,7 @@ function Helix3D({ className }: { className?: string }) {
 
   return (
     <svg
+      ref={elementRef}
       className={className}
       width={HELIX_AMPLITUDE * 2 + 20}
       height={HELIX_HEIGHT + 20}
@@ -1020,6 +1095,72 @@ function useActiveSection(ids: string[]) {
 }
 
 const SECTION_IDS = ["hero", "branslar", "hakkimda", "notlar", "iletisim"];
+
+const RAIL_SECTIONS = [
+  { id: "hero", label: "Başlangıç" },
+  { id: "branslar", label: "Branşlar" },
+  { id: "hakkimda", label: "Hakkımda" },
+  { id: "notlar", label: "Ders Notları" },
+  { id: "iletisim", label: "İletişim" },
+];
+
+/* A wayfinding rail: where you are in the document, always answerable
+   without scrolling back to the nav. Desktop only — it needs the gutter. */
+function SectionRail() {
+  const active = useActiveSection(SECTION_IDS);
+
+  return (
+    <motion.nav
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.9, delay: 1.2, ease: EASE_EXPO }}
+      aria-label="Bölümler"
+      className="fixed right-6 top-1/2 z-[58] hidden -translate-y-1/2 flex-col items-end gap-4 xl:flex"
+    >
+      {RAIL_SECTIONS.map((section) => {
+        const isActive = active === section.id;
+        return (
+          <a
+            key={section.id}
+            href={`#${section.id}`}
+            aria-current={isActive ? "true" : undefined}
+            className="group flex items-center gap-3"
+          >
+            <motion.span
+              animate={{
+                opacity: isActive ? 1 : 0,
+                x: isActive ? 0 : 8,
+              }}
+              transition={{ duration: 0.45, ease: EASE_EXPO }}
+              className="text-[10px] tracking-[0.25em] text-foreground/50 group-hover:opacity-100"
+            >
+              {section.label.toLocaleUpperCase("tr-TR")}
+            </motion.span>
+            <span className="relative flex h-3 w-3 items-center justify-center">
+              <motion.span
+                animate={{
+                  scale: isActive ? 1 : 0.45,
+                  backgroundColor: isActive
+                    ? "rgb(from var(--accent) r g b / 100%)"
+                    : "rgb(from var(--foreground) r g b / 25%)",
+                }}
+                transition={SPRING_SOFT}
+                className="h-1.5 w-1.5 rounded-full"
+              />
+              {isActive && (
+                <motion.span
+                  layoutId="rail-halo"
+                  transition={{ type: "spring", stiffness: 340, damping: 30 }}
+                  className="absolute inset-0 rounded-full border border-accent/50"
+                />
+              )}
+            </span>
+          </a>
+        );
+      })}
+    </motion.nav>
+  );
+}
 
 function FloatingNav() {
   const [scrolled, setScrolled] = useState(false);
@@ -1864,53 +2005,31 @@ function ButterflyIllustration({ className }: { className?: string }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Topics marquee — speed and direction follow scroll velocity, so    */
-/*  the strip feels physically coupled to the page.                    */
+/*  Topics marquee — one steady, unhurried loop. Coupling the speed to  */
+/*  scroll velocity made the strip lurch and change direction under     */
+/*  the reader, so it runs at a constant rate instead.                  */
 /* ------------------------------------------------------------------ */
 
-const MARQUEE_BASE_VELOCITY = -2.6;
-
 function Marquee() {
-  const reduced = useReducedMotion();
-  const baseX = useMotionValue(0);
-  const { scrollY } = useScroll();
-  const scrollVelocity = useVelocity(scrollY);
-  const smoothVelocity = useSpring(scrollVelocity, { damping: 48, stiffness: 320 });
-  const velocityFactor = useTransform(smoothVelocity, [-1800, 0, 1800], [-4, 0, 4], {
-    clamp: false,
-  });
-  const direction = useRef(1);
-  const x = useTransform(baseX, (v) => `${wrap(-25, 0, v)}%`);
-
-  useAnimationFrame((_, delta) => {
-    if (reduced) return;
-    let moveBy = direction.current * MARQUEE_BASE_VELOCITY * (delta / 1000);
-    const factor = velocityFactor.get();
-    if (factor < 0) direction.current = -1;
-    else if (factor > 0) direction.current = 1;
-    moveBy += direction.current * moveBy * Math.abs(factor);
-    baseX.set(baseX.get() + moveBy);
-  });
+  const loop = [...TOPICS_TICKER, ...TOPICS_TICKER];
 
   return (
     <section className="relative overflow-hidden border-y border-foreground/5 bg-foreground/[0.015] py-6">
-      <motion.div style={{ x }} className="mask-fade-x flex w-max items-center whitespace-nowrap">
-        {[0, 1, 2, 3].map((copy) => (
-          <div key={copy} className="flex items-center gap-10 pr-10" aria-hidden={copy > 0}>
-            {TOPICS_TICKER.map((topic, i) => (
-              <span
-                key={`${copy}-${topic}`}
-                className="flex items-center gap-10 text-sm tracking-[0.2em] text-foreground/30 transition-colors duration-300 hover:text-foreground/70"
-              >
-                {topic}
-                <span
-                  className={i % 2 === 0 ? TONE_CLASSES.accent.dot : TONE_CLASSES.pop.dot}
-                >
-                  •
-                </span>
-              </span>
-            ))}
-          </div>
+      <motion.div
+        animate={{ x: ["0%", "-50%"] }}
+        transition={{ duration: 52, repeat: Infinity, ease: "linear" }}
+        className="mask-fade-x flex w-max items-center gap-10 whitespace-nowrap"
+      >
+        {loop.map((topic, i) => (
+          <span
+            key={i}
+            className="flex items-center gap-10 text-sm tracking-[0.2em] text-foreground/30"
+          >
+            {topic}
+            <span className={i % 2 === 0 ? TONE_CLASSES.accent.dot : TONE_CLASSES.pop.dot}>
+              •
+            </span>
+          </span>
         ))}
       </motion.div>
     </section>
@@ -2249,8 +2368,12 @@ const ORGANELLES = [
 
 const VESICLE_COUNT = 14;
 
-function LivingCell() {
+/* Hover is reported upward rather than labelled in place: the caller
+   frames this cell inside a clipping circle, and a label drawn in here
+   would be cropped and would zoom along with the cell. */
+function LivingCell({ onHover }: { onHover?: (label: string | null) => void }) {
   const reduced = useReducedMotion();
+  const { elementRef, visible } = useVisibilityRef<HTMLDivElement>();
   const gradId = useId();
   const membrane = useRef<SVGPathElement>(null);
   const cytoplasm = useRef<SVGPathElement>(null);
@@ -2258,7 +2381,6 @@ function LivingCell() {
   const nucleolus = useRef<SVGCircleElement>(null);
   const organelles = useRef<(SVGGElement | null)[]>([]);
   const vesicles = useRef<(SVGCircleElement | null)[]>([]);
-  const [hovered, setHovered] = useState<string | null>(null);
 
   /* Seeded start points render identically on server and client; the ref
      holds the live bodies the animation loop integrates. */
@@ -2279,7 +2401,7 @@ function LivingCell() {
   const initialNucleus = useMemo(() => blobPath(100, 100, 27, 0, 0.05, 1.3), []);
 
   useAnimationFrame((ms, delta) => {
-    if (reduced) return;
+    if (reduced || !visible.current) return;
     const t = ms / 1000;
     const dt = Math.min(delta / 1000, 0.05);
 
@@ -2328,7 +2450,7 @@ function LivingCell() {
   });
 
   return (
-    <div className="relative">
+    <div ref={elementRef} className="relative h-full w-full">
       <svg viewBox="0 0 200 200" className="h-full w-full overflow-visible">
         <defs>
           <radialGradient id={`${gradId}-cyto`} cx="42%" cy="36%">
@@ -2417,8 +2539,8 @@ function LivingCell() {
               organelles.current[i] = el;
             }}
             transform={`translate(${(100 + Math.cos(o.phase) * o.rx).toFixed(2)} ${(100 + Math.sin(o.phase) * o.ry).toFixed(2)})`}
-            onMouseEnter={() => setHovered(o.label)}
-            onMouseLeave={() => setHovered(null)}
+            onMouseEnter={() => onHover?.(o.label)}
+            onMouseLeave={() => onHover?.(null)}
             className="cursor-pointer"
           >
             <motion.ellipse
@@ -2471,24 +2593,13 @@ function LivingCell() {
         />
       </svg>
 
-      <AnimatePresence>
-        {hovered && (
-          <motion.span
-            initial={{ opacity: 0, y: 8, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.9 }}
-            transition={{ duration: 0.25, ease: EASE }}
-            className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-accent/30 bg-background/90 px-3 py-1.5 text-xs text-foreground/80 backdrop-blur"
-          >
-            {hovered}
-          </motion.span>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
 
 function CellVisual() {
+  const [hoveredOrganelle, setHoveredOrganelle] = useState<string | null>(null);
+
   return (
     <section className="relative overflow-hidden px-6 py-32 sm:py-40">
       <div className="mx-auto grid max-w-6xl items-center gap-16 md:grid-cols-2">
@@ -2497,6 +2608,7 @@ function CellVisual() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
+          data-cursor-label="İNCELE"
           className="relative mx-auto aspect-square w-full max-w-md"
         >
           {/* dashed guide rings — slow counter-rotation adds depth */}
@@ -2515,13 +2627,29 @@ function CellVisual() {
             transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
             className="absolute inset-6 rounded-full bg-accent/5 blur-2xl"
           />
-          <LivingCell />
+
+          <LivingCell onHover={setHoveredOrganelle} />
+
+          <AnimatePresence>
+            {hoveredOrganelle && (
+              <motion.span
+                initial={{ opacity: 0, y: 8, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.9 }}
+                transition={{ duration: 0.25, ease: EASE }}
+                className="pointer-events-none absolute -bottom-3 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-accent/30 bg-background/90 px-3 py-1.5 text-xs text-foreground/80 backdrop-blur"
+              >
+                {hoveredOrganelle}
+              </motion.span>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         <div>
           <Reveal>
             <p className="mb-4 text-xs tracking-[0.3em] text-accent/80">MİKRO DÜNYA</p>
           </Reveal>
+
           <motion.p
             variants={staggerContainer(0.09)}
             initial="hidden"
@@ -2532,11 +2660,11 @@ function CellVisual() {
             <MaskLine>&ldquo;Her hücre kendi içinde</MaskLine>
             <MaskLine className="text-accent">kusursuz bir sistemdir.&rdquo;</MaskLine>
           </motion.p>
+
           <Reveal delay={0.25}>
             <p className="mt-6 max-w-md text-sm leading-relaxed text-foreground/45">
-              Üstteki organellerin üzerine gel — zar dalgalanır, veziküller
-              Brown hareketiyle sürüklenir, mitokondriler kendi yörüngelerinde
-              döner.
+              Organellerin üzerine gel — zar dalgalanır, veziküller Brown
+              hareketiyle sürüklenir, mitokondriler kendi yörüngelerinde döner.
             </p>
           </Reveal>
         </div>
@@ -2574,6 +2702,7 @@ function NoteCard({ note, tone, index }: { note: (typeof NOTES_BIO)[number]; ton
         onMouseMove={tilt.onMouseMove}
         onMouseLeave={tilt.onMouseLeave}
         whileHover={{ y: -10 }}
+        data-cursor-label="OKU"
         style={{
           rotateX: tilt.springRotateX,
           rotateY: tilt.springRotateY,
@@ -2720,6 +2849,18 @@ function Notes() {
     setTab(next);
   }
 
+  /* Arrow keys move between tabs, as the tabs pattern expects. */
+  function handleTabKeys(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const step = e.key === "ArrowRight" ? 1 : -1;
+    const next =
+      NOTE_TABS[(NOTE_TABS.indexOf(tab) + step + NOTE_TABS.length) % NOTE_TABS.length];
+    selectTab(next);
+    const buttons = e.currentTarget.querySelectorAll("button");
+    buttons[NOTE_TABS.indexOf(next)]?.focus();
+  }
+
   return (
     <section id="notlar" className="relative overflow-hidden px-6 py-32 sm:py-40">
       <FloatingDecor icon={Atom} className="right-[4%] top-20" duration={9} />
@@ -2734,10 +2875,18 @@ function Notes() {
         </Reveal>
 
         <Reveal className="mb-14 inline-block" delay={0.1}>
-          <div className="relative inline-flex rounded-full border border-foreground/10 bg-foreground/[0.02] p-1">
+          <div
+            role="tablist"
+            aria-label="Kademe seçimi"
+            onKeyDown={handleTabKeys}
+            className="relative inline-flex rounded-full border border-foreground/10 bg-foreground/[0.02] p-1"
+          >
             {NOTE_TABS.map((t) => (
               <motion.button
                 key={t}
+                role="tab"
+                aria-selected={tab === t}
+                tabIndex={tab === t ? 0 : -1}
                 onClick={() => selectTab(t)}
                 whileTap={{ scale: 0.96 }}
                 className={`relative z-10 rounded-full px-5 py-2.5 text-sm transition-colors duration-300 ${
@@ -3339,6 +3488,7 @@ export default function Home() {
         <CursorGlow />
         <CustomCursor />
         <FloatingNav />
+        <SectionRail />
         <BackToTop />
         <div className="relative z-10">
           <Hero />
