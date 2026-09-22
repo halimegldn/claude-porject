@@ -18,6 +18,12 @@
 
   --pop: #fb923c; /* contrast accent — amber (Fen Bilimleri branch) */
   --pop-light: #fdba74;
+
+  /* Motion tokens — one place to retune the whole site's feel. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Light theme — same "Botanik Orman" identity, paper/botanical surface. */
@@ -75,7 +81,8 @@ body {
   background: var(--background);
   color: var(--foreground);
   overflow-x: hidden;
-  transition: background-color 0.4s ease, color 0.4s ease;
+  transition: background-color 0.6s var(--ease-out-quint),
+    color 0.6s var(--ease-out-quint);
 }
 
 ::selection {
@@ -92,9 +99,14 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--accent);
+  background: linear-gradient(var(--accent), var(--accent-2));
   border-radius: 9999px;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Film grain — a slowly re-seeded noise plate. Shifting the tile in  */
+/*  discrete steps reads as real grain rather than a static texture.   */
+/* ------------------------------------------------------------------ */
 
 .noise-overlay {
   position: fixed;
@@ -104,7 +116,207 @@ body {
   opacity: 0.045;
   mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-shift 0.9s steps(1) infinite;
 }
+
+@keyframes grain-shift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  12.5% {
+    transform: translate3d(-6%, 3%, 0);
+  }
+  25% {
+    transform: translate3d(4%, -5%, 0);
+  }
+  37.5% {
+    transform: translate3d(-3%, -4%, 0);
+  }
+  50% {
+    transform: translate3d(5%, 4%, 0);
+  }
+  62.5% {
+    transform: translate3d(-5%, 2%, 0);
+  }
+  75% {
+    transform: translate3d(3%, -3%, 0);
+  }
+  87.5% {
+    transform: translate3d(-2%, 5%, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Ambient light — a very slow aurora behind the whole document.      */
+/* ------------------------------------------------------------------ */
+
+.aurora {
+  position: fixed;
+  inset: -20%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  filter: blur(80px);
+  background:
+    radial-gradient(
+      38% 30% at 20% 22%,
+      color-mix(in srgb, var(--accent-deep) 26%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      32% 28% at 78% 30%,
+      color-mix(in srgb, var(--accent-2) 16%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      40% 34% at 55% 82%,
+      color-mix(in srgb, var(--accent) 16%, transparent),
+      transparent 72%
+    );
+  animation: aurora-drift 34s var(--ease-in-out-quart) infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(-2%, -1%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, 2%, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-1%, 3%, 0) scale(1.03);
+  }
+}
+
+/* Scanning light sweep used on cards/buttons. */
+@keyframes shimmer {
+  0% {
+    background-position: -140% 0;
+  }
+  100% {
+    background-position: 240% 0;
+  }
+}
+
+.shimmer-text {
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--foreground) 55%, transparent) 42%,
+    color-mix(in srgb, var(--foreground) 92%, transparent) 50%,
+    color-mix(in srgb, var(--foreground) 55%, transparent) 58%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shimmer 2.6s linear infinite;
+}
+
+/* Animated gradient text (hero headline, key phrases). */
+.text-gradient-anim {
+  background-image: linear-gradient(
+    100deg,
+    var(--accent-light),
+    var(--accent),
+    var(--accent-2-light),
+    var(--accent),
+    var(--accent-light)
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gradient-pan 9s linear infinite;
+}
+
+@keyframes gradient-pan {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 250% 50%;
+  }
+}
+
+/* Edge fades for marquees / horizontal scrollers. */
+.mask-fade-x {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 9%,
+    #000 91%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 9%,
+    #000 91%,
+    transparent
+  );
+}
+
+/* Expanding sonar ring, used under live/status dots. */
+@keyframes ring-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.ring-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: ring-pulse 2.4s var(--ease-out-quint) infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Custom cursor — native cursor is only hidden once JS has mounted   */
+/*  the replacement, so a failed hydration never leaves you blind.     */
+/* ------------------------------------------------------------------ */
+
+html.has-custom-cursor,
+html.has-custom-cursor * {
+  cursor: none !important;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Theme cross-fade via the View Transitions API (progressive).       */
+/* ------------------------------------------------------------------ */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Accessibility — collapse everything for reduced-motion users.      */
+/* ------------------------------------------------------------------ */
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -114,5 +326,15 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .aurora,
+  .noise-overlay {
+    animation: none !important;
+  }
+
+  html.has-custom-cursor,
+  html.has-custom-cursor * {
+    cursor: auto !important;
   }
 }
