@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Send } from "lucide-react";
 import { EASE_EXPO, fadeUp, SPRING_SNAPPY, SPRING_SOFT, staggerContainer } from "@/lib/motion";
@@ -45,9 +45,36 @@ export function Field({
   );
 }
 
+/* Confetti is precomputed at module level from seeded() so every burst is
+   identical and no Math.random() runs during render. Each piece shoots
+   up and out, then gravity pulls it down past its launch point. */
+const CONFETTI_COLORS = ["bg-accent", "bg-accent-2-light", "bg-pop", "bg-accent-light"];
+export const CONFETTI = Array.from({ length: 40 }, (_, i) => {
+  const angle = -Math.PI / 2 + (seeded(i + 3) - 0.5) * Math.PI * 1.5;
+  const power = 90 + seeded(i * 7 + 1) * 120;
+  const dx = Math.cos(angle) * power;
+  const dy = Math.sin(angle) * power;
+  return {
+    x: [0, dx * 0.8, dx],
+    y: [0, dy, dy + 140 + seeded(i * 5) * 80],
+    rotate: [0, (seeded(i * 11) - 0.5) * 540],
+    delay: seeded(i * 13) * 0.12,
+    duration: 1.3 + seeded(i * 17) * 0.5,
+    round: i % 3 === 0,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+  };
+});
+
 export function ContactForm() {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
-  const [sent, setSent] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sending" | "sent">("idle");
+
+  /* Sending is simulated for now — there is no backend yet. */
+  useEffect(() => {
+    if (status !== "sending") return;
+    const timer = setTimeout(() => setStatus("sent"), 900);
+    return () => clearTimeout(timer);
+  }, [status]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -55,40 +82,41 @@ export function ContactForm() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSent(true);
+    if (status === "idle") setStatus("sending");
   }
+
+  const sending = status === "sending";
 
   return (
     <AnimatePresence mode="wait">
-      {sent ? (
+      {status === "sent" ? (
         <motion.div
           key="sent"
           initial={{ opacity: 0, y: 16, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0 }}
           transition={SPRING_SOFT}
-          className="relative overflow-hidden rounded-2xl border border-accent/30 bg-accent/5 p-10 text-center"
+          className="relative rounded-2xl border border-accent/30 bg-accent/5 p-10 text-center"
         >
           {/* confetti burst */}
-          {Array.from({ length: 14 }, (_, i) => {
-            const angle = (i / 14) * Math.PI * 2;
-            return (
-              <motion.span
-                key={i}
-                initial={{ opacity: 1, x: 0, y: 0, scale: 0 }}
-                animate={{
-                  opacity: 0,
-                  x: Math.cos(angle) * (60 + seeded(i) * 70),
-                  y: Math.sin(angle) * (60 + seeded(i * 2) * 70),
-                  scale: 1,
-                }}
-                transition={{ duration: 1.1, delay: 0.15, ease: EASE_EXPO }}
-                className={`absolute left-1/2 top-10 h-1.5 w-1.5 rounded-full ${
-                  i % 2 ? "bg-accent" : "bg-accent-2-light"
-                }`}
-              />
-            );
-          })}
+          {CONFETTI.map((c, i) => (
+            <motion.span
+              key={i}
+              aria-hidden
+              initial={{ opacity: 1, x: 0, y: 0, rotate: 0, scale: 0 }}
+              animate={{ opacity: [1, 1, 0], x: c.x, y: c.y, rotate: c.rotate, scale: 1 }}
+              transition={{
+                duration: c.duration,
+                delay: 0.1 + c.delay,
+                ease: [0.2, 0.7, 0.4, 1],
+                opacity: { duration: c.duration, delay: 0.1 + c.delay, times: [0, 0.7, 1] },
+                scale: { duration: 0.25, delay: 0.1 + c.delay, ease: EASE_EXPO },
+              }}
+              className={`absolute left-1/2 top-16 ${
+                c.round ? "h-1.5 w-1.5 rounded-full" : "h-2.5 w-1 rounded-[1px]"
+              } ${c.color}`}
+            />
+          ))}
 
           <motion.span
             initial={{ scale: 0, rotate: -40 }}
@@ -139,22 +167,47 @@ export function ContactForm() {
           <motion.button
             variants={fadeUp}
             type="submit"
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
+            disabled={sending}
+            aria-busy={sending}
+            whileHover={sending ? undefined : { scale: 1.03 }}
+            whileTap={sending ? undefined : { scale: 0.97 }}
             transition={SPRING_SNAPPY}
-            className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-full px-7 py-3.5 text-sm font-medium text-background sm:w-auto"
+            className="group relative inline-flex w-full items-center justify-center gap-2 overflow-hidden rounded-full px-7 py-3.5 text-sm font-medium text-background disabled:cursor-wait sm:w-auto"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-accent via-accent-2-light to-accent bg-[length:200%_100%] transition-[background-position] duration-700 group-hover:bg-[position:100%_0]" />
             <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-background/30 to-transparent transition-transform duration-[900ms] ease-out group-hover:translate-x-full" />
-            <span className="relative flex items-center gap-2">
-              Gönder
+            <AnimatePresence mode="wait" initial={false}>
               <motion.span
-                animate={{ x: [0, 3, 0] }}
-                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                key={sending ? "sending" : "idle"}
+                initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                transition={{ duration: 0.25, ease: EASE_EXPO }}
+                className="relative flex items-center gap-2"
               >
-                <Send size={15} />
+                {sending ? (
+                  <>
+                    Gönderiliyor
+                    <motion.span
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                      className="block h-3.5 w-3.5 rounded-full border-2 border-background/30 border-t-background"
+                    />
+                  </>
+                ) : (
+                  <>
+                    Gönder
+                    <motion.span
+                      animate={{ x: [0, 3, 0], rotate: [0, -8, 0] }}
+                      transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                      className="transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-1"
+                    >
+                      <Send size={15} />
+                    </motion.span>
+                  </>
+                )}
               </motion.span>
-            </span>
+            </AnimatePresence>
           </motion.button>
         </motion.form>
       )}

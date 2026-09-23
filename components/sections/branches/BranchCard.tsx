@@ -26,15 +26,21 @@ export function BranchCard({
   return (
     <motion.div
       variants={{
-        hidden: { opacity: 0, x: fromLeft ? -70 : 70, rotateY: fromLeft ? -8 : 8 },
+        hidden: {
+          opacity: 0,
+          x: fromLeft ? -90 : 90,
+          rotateY: fromLeft ? -28 : 28,
+          filter: "blur(10px)",
+        },
         visible: {
           opacity: 1,
           x: 0,
           rotateY: 0,
-          transition: { duration: 1.05, ease: EASE_EXPO },
+          filter: "blur(0px)",
+          transition: { duration: 1.2, ease: EASE_EXPO },
         },
       }}
-      style={{ perspective: 1100 }}
+      style={{ perspective: 1100, transformPerspective: 1100 }}
       className="h-full"
     >
       <motion.div

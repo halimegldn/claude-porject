@@ -6,6 +6,7 @@ import { Dna, Menu, X, ArrowUpRight } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { NAV_LINKS, SECTION_IDS } from "@/lib/data";
 import { useActiveSection } from "@/lib/hooks";
+import { useIntroReady } from "@/lib/intro";
 import { EASE, EASE_EXPO, fadeUp, staggerContainer } from "@/lib/motion";
 
 export function FloatingNav() {
@@ -15,6 +16,7 @@ export function FloatingNav() {
   const { scrollY } = useScroll();
   const lastY = useRef(0);
   const active = useActiveSection(SECTION_IDS);
+  const ready = useIntroReady();
 
   useMotionValueEvent(scrollY, "change", (y) => {
     setScrolled(y > 24);
@@ -28,8 +30,8 @@ export function FloatingNav() {
   return (
     <motion.header
       initial={{ y: -80, opacity: 0 }}
-      animate={{ y: hidden ? -110 : 0, opacity: 1 }}
-      transition={{ duration: 0.75, ease: EASE_EXPO, delay: hidden ? 0 : 0.1 }}
+      animate={{ y: hidden || !ready ? -110 : 0, opacity: ready ? 1 : 0 }}
+      transition={{ duration: 0.75, ease: EASE_EXPO, delay: hidden ? 0 : 0.35 }}
       className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 sm:px-6"
     >
       <motion.div

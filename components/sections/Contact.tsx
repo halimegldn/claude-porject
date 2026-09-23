@@ -3,9 +3,8 @@
 import { motion } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
 import { ContactForm } from "@/components/sections/contact/ContactForm";
-import { AccentBar } from "@/components/ui/AccentBar";
-import { MaskLine } from "@/components/ui/MaskLine";
 import { Reveal } from "@/components/ui/Reveal";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { ShineSweep } from "@/components/ui/ShineSweep";
 import { SOCIALS } from "@/lib/data";
 import { fadeUp, SPRING_SNAPPY, SPRING_SOFT, staggerContainer } from "@/lib/motion";
@@ -14,23 +13,12 @@ export function Contact() {
   return (
     <section id="iletisim" className="relative px-6 py-32 sm:py-40">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-10 max-w-xl">
-          <AccentBar />
-          <motion.h2
-            variants={staggerContainer(0.1)}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            className="text-3xl font-semibold tracking-tight sm:text-5xl"
-          >
-            <MaskLine>Aklında Bir Soru mu Var?</MaskLine>
-          </motion.h2>
-          <Reveal delay={0.12}>
-            <p className="mt-4 max-w-md text-foreground/50">
-              Biyoloji bazen karmaşık görünebilir. Birlikte çözelim.
-            </p>
-          </Reveal>
-        </div>
+        <SectionHeading
+          index="04"
+          lines={["Aklında Bir", "Soru mu Var?"]}
+          desc="Biyoloji bazen karmaşık görünebilir. Birlikte çözelim."
+          className="mb-10 max-w-xl"
+        />
 
         <div className="grid gap-16 md:grid-cols-[1.2fr_0.8fr]">
           <Reveal>

@@ -15,6 +15,7 @@ import { ScrollIndicator } from "@/components/sections/hero/ScrollIndicator";
 import { MagneticButton } from "@/components/ui/MagneticButton";
 import { MaskLine } from "@/components/ui/MaskLine";
 import { SplitText } from "@/components/ui/SplitText";
+import { useIntroReady } from "@/lib/intro";
 import { fadeUp, staggerContainer } from "@/lib/motion";
 
 /* ------------------------------------------------------------------ */
@@ -24,6 +25,7 @@ import { fadeUp, staggerContainer } from "@/lib/motion";
 export function Hero() {
   const sectionRef = useRef<HTMLElement>(null);
   const reduced = useReducedMotion();
+  const ready = useIntroReady();
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
 
@@ -54,7 +56,12 @@ export function Hero() {
       onMouseMove={handleMouseMove}
       className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6"
     >
-      <HeroBackground mouseX={mouseX} mouseY={mouseY} scrollProgress={scrollYProgress} />
+      <HeroBackground
+        mouseX={mouseX}
+        mouseY={mouseY}
+        scrollProgress={scrollYProgress}
+        ready={ready}
+      />
 
       <motion.div
         style={{
@@ -65,7 +72,11 @@ export function Hero() {
         }}
         className="relative z-10 max-w-4xl text-center"
       >
-        <motion.div variants={staggerContainer(0.14, 0.15)} initial="hidden" animate="visible">
+        <motion.div
+          variants={staggerContainer(0.14, 0.15)}
+          initial="hidden"
+          animate={ready ? "visible" : "hidden"}
+        >
           <motion.p
             variants={fadeUp}
             className="mb-6 flex items-center justify-center gap-3 text-xs font-medium tracking-[0.3em] text-accent/80 sm:text-sm"

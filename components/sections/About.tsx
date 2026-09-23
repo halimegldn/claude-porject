@@ -3,14 +3,12 @@
 import { motion } from "framer-motion";
 import { Microscope } from "lucide-react";
 import { LeafIllustration } from "@/components/illustrations/LeafIllustration";
-import { AccentBar } from "@/components/ui/AccentBar";
 import { FloatingDecor } from "@/components/ui/FloatingDecor";
-import { MaskLine } from "@/components/ui/MaskLine";
 import { Parallax } from "@/components/ui/Parallax";
-import { Reveal } from "@/components/ui/Reveal";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { ShineSweep } from "@/components/ui/ShineSweep";
 import { PHILOSOPHY } from "@/lib/data";
-import { fadeUpBig, scaleIn, SPRING_SNAPPY, SPRING_SOFT, staggerContainer } from "@/lib/motion";
+import { fadeUpBig, SPRING_SNAPPY, SPRING_SOFT, staggerContainer } from "@/lib/motion";
 
 /* ------------------------------------------------------------------ */
 /*  About / Vision                                                     */
@@ -36,72 +34,44 @@ export function About() {
       </Parallax>
 
       <div className="mx-auto max-w-5xl">
-        <div className="relative grid items-start gap-6 md:grid-cols-[auto_1fr] md:gap-12">
-          <motion.span
-            variants={scaleIn}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            className="-mt-6 hidden select-none text-[10rem] font-semibold leading-none text-foreground/[0.04] md:block"
-          >
-            01
-          </motion.span>
+        <SectionHeading
+          index="02"
+          lines={["Biyolojiyi Ezberletmiyorum.", "Anlamayı Öğretiyorum."]}
+          desc="On yılı aşkın süredir hem ortaokulda Fen Bilimleri hem de lisede Biyoloji öğretiyorum; amacım öğrencilerin konuları ezberlemesi değil, yaşamın arkasındaki sistemi görmesi. Kuvvetten hücreye, ekosistemden genetiğe, her ölçekte aynı merakla yaklaşıyorum."
+          className="max-w-2xl"
+        />
 
-          <div>
-            <AccentBar />
-            <motion.h2
-              variants={staggerContainer(0.1)}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-100px" }}
-              className="max-w-2xl text-3xl font-semibold leading-tight tracking-tight sm:text-5xl"
-            >
-              <MaskLine>Biyolojiyi Ezberletmiyorum.</MaskLine>
-              <MaskLine className="text-accent">Anlamayı Öğretiyorum.</MaskLine>
-            </motion.h2>
-
-            <Reveal delay={0.15}>
-              <p className="mt-6 max-w-xl leading-relaxed text-foreground/60">
-                On yılı aşkın süredir hem ortaokulda Fen Bilimleri hem de lisede
-                Biyoloji öğretiyorum; amacım öğrencilerin konuları ezberlemesi
-                değil, yaşamın arkasındaki sistemi görmesi. Kuvvetten hücreye,
-                ekosistemden genetiğe, her ölçekte aynı merakla yaklaşıyorum.
-              </p>
-            </Reveal>
-
+        <motion.div
+          variants={staggerContainer(0.14)}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          className="mt-14 grid gap-5 sm:grid-cols-3"
+        >
+          {PHILOSOPHY.map((item) => (
             <motion.div
-              variants={staggerContainer(0.14)}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-100px" }}
-              className="mt-14 grid gap-5 sm:grid-cols-3"
+              key={item.title}
+              variants={{ ...fadeUpBig, hover: { y: -10, scale: 1.03 } }}
+              whileHover="hover"
+              transition={SPRING_SOFT}
+              className="group relative overflow-hidden rounded-2xl border border-foreground/10 bg-foreground/[0.02] p-6 transition-colors duration-500 hover:border-accent/30"
             >
-              {PHILOSOPHY.map((item) => (
-                <motion.div
-                  key={item.title}
-                  variants={fadeUpBig}
-                  whileHover={{ y: -8, scale: 1.02 }}
-                  transition={SPRING_SOFT}
-                  className="group relative rounded-2xl border border-foreground/10 bg-foreground/[0.02] p-6 transition-colors duration-500 hover:border-accent/30"
-                >
-                  <ShineSweep />
-                  <motion.div
-                    whileHover={{ rotate: 14, scale: 1.2 }}
-                    transition={SPRING_SNAPPY}
-                    className="relative mb-4 inline-block"
-                  >
-                    <item.icon size={20} className="text-accent" strokeWidth={1.5} />
-                  </motion.div>
-                  <h3 className="relative mb-2 font-medium text-foreground/90">{item.title}</h3>
-                  <p className="relative text-sm leading-relaxed text-foreground/50">
-                    {item.desc}
-                  </p>
-                  <motion.span className="absolute inset-x-6 bottom-0 h-px origin-left scale-x-0 bg-gradient-to-r from-accent to-transparent transition-transform duration-700 ease-out group-hover:scale-x-100" />
-                </motion.div>
-              ))}
+              <ShineSweep />
+              {/* soft glow that blooms from the icon corner on hover */}
+              <span className="pointer-events-none absolute -left-10 -top-10 h-32 w-32 rounded-full bg-accent/0 blur-2xl transition-colors duration-700 group-hover:bg-accent/15" />
+              <motion.div
+                variants={{ hover: { rotate: 18, scale: 1.25, y: -2 } }}
+                transition={SPRING_SNAPPY}
+                className="relative mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10"
+              >
+                <item.icon size={20} className="text-accent" strokeWidth={1.5} />
+              </motion.div>
+              <h3 className="relative mb-2 font-medium text-foreground/90">{item.title}</h3>
+              <p className="relative text-sm leading-relaxed text-foreground/50">{item.desc}</p>
+              <span className="absolute inset-x-6 bottom-0 h-px origin-left scale-x-0 bg-gradient-to-r from-accent to-transparent transition-transform duration-700 ease-out group-hover:scale-x-100" />
             </motion.div>
-          </div>
-        </div>
+          ))}
+        </motion.div>
       </div>
     </section>
   );

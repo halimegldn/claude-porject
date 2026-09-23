@@ -1,19 +1,42 @@
 "use client";
 
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useRef, useState } from "react";
+import { motion, AnimatePresence, useInView, type Variants } from "framer-motion";
 import { Atom } from "lucide-react";
 import { CurriculumAccordion } from "@/components/sections/notes/CurriculumAccordion";
 import { NoteCard } from "@/components/sections/notes/NoteCard";
-import { AccentBar } from "@/components/ui/AccentBar";
 import { FloatingDecor } from "@/components/ui/FloatingDecor";
 import { Reveal } from "@/components/ui/Reveal";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { NOTE_TAB_TONE, NOTE_TABS, NOTES_BY_TAB, TONE_CLASSES } from "@/lib/data";
-import { EASE, EASE_EXPO, staggerContainer } from "@/lib/motion";
+import { EASE, EASE_EXPO } from "@/lib/motion";
+
+/* The card panel slides in from the side of the tab you moved toward and
+   leaves toward the other, so switching tabs reads as moving through
+   space. Cards inside still stagger in on the same "visible" label. */
+const PANEL_VARIANTS: Variants = {
+  hidden: (d: number) => ({ opacity: 0, x: d * 60, filter: "blur(8px)" }),
+  visible: {
+    opacity: 1,
+    x: 0,
+    filter: "blur(0px)",
+    transition: { duration: 0.6, ease: EASE_EXPO, staggerChildren: 0.12 },
+  },
+  exit: (d: number) => ({
+    opacity: 0,
+    x: d * -40,
+    filter: "blur(8px)",
+    transition: { duration: 0.32, ease: EASE },
+  }),
+};
 
 export function Notes() {
   const [tab, setTab] = useState<(typeof NOTE_TABS)[number]>(NOTE_TABS[0]);
   const [direction, setDirection] = useState(1);
+  const gridRef = useRef<HTMLDivElement>(null);
+  /* Cards wait until the grid is on screen — they used to play on mount,
+     far below the fold, where nobody could see them. */
+  const inView = useInView(gridRef, { once: true, margin: "-100px" });
   const activeTone = NOTE_TAB_TONE[tab];
 
   function selectTab(next: (typeof NOTE_TABS)[number]) {
@@ -21,13 +44,17 @@ export function Notes() {
     setTab(next);
   }
 
-  /* Arrow keys move between tabs, as the tabs pattern expects. */
+  /* Arrow keys, Home and End move between tabs, as the tabs pattern expects. */
   function handleTabKeys(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const current = NOTE_TABS.indexOf(tab);
+    let nextIndex: number;
+    if (e.key === "ArrowRight") nextIndex = (current + 1) % NOTE_TABS.length;
+    else if (e.key === "ArrowLeft") nextIndex = (current - 1 + NOTE_TABS.length) % NOTE_TABS.length;
+    else if (e.key === "Home") nextIndex = 0;
+    else if (e.key === "End") nextIndex = NOTE_TABS.length - 1;
+    else return;
     e.preventDefault();
-    const step = e.key === "ArrowRight" ? 1 : -1;
-    const next =
-      NOTE_TABS[(NOTE_TABS.indexOf(tab) + step + NOTE_TABS.length) % NOTE_TABS.length];
+    const next = NOTE_TABS[nextIndex];
     selectTab(next);
     const buttons = e.currentTarget.querySelectorAll("button");
     buttons[NOTE_TABS.indexOf(next)]?.focus();
@@ -37,14 +64,12 @@ export function Notes() {
     <section id="notlar" className="relative overflow-hidden px-6 py-32 sm:py-40">
       <FloatingDecor icon={Atom} className="right-[4%] top-20" duration={9} />
       <div className="mx-auto max-w-6xl">
-        <Reveal className="mb-10 max-w-xl">
-          <AccentBar />
-          <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">Bilgiyi Keşfet</h2>
-          <p className="mt-4 text-foreground/50">
-            Kademene göre seç: Fen Bilimleri mi, Biyoloji mi? Aşağıda sınıf sınıf tüm müfredatı
-            bulabilirsin.
-          </p>
-        </Reveal>
+        <SectionHeading
+          index="03"
+          lines={["Bilgiyi", "Keşfet"]}
+          desc="Kademene göre seç: Fen Bilimleri mi, Biyoloji mi? Aşağıda sınıf sınıf tüm müfredatı bulabilirsin."
+          className="mb-10 max-w-xl"
+        />
 
         <Reveal className="mb-14 inline-block" delay={0.1}>
           <div
@@ -81,15 +106,12 @@ export function Notes() {
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={tab}
-            variants={staggerContainer(0.12)}
+            ref={gridRef}
+            variants={PANEL_VARIANTS}
+            custom={direction}
             initial="hidden"
-            animate="visible"
-            exit={{
-              opacity: 0,
-              x: direction * -40,
-              filter: "blur(8px)",
-              transition: { duration: 0.32, ease: EASE },
-            }}
+            animate={inView ? "visible" : "hidden"}
+            exit="exit"
             className="grid gap-6 md:grid-cols-3"
           >
             {NOTES_BY_TAB[tab].map((note, i) => (

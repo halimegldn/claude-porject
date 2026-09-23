@@ -25,6 +25,16 @@ const THEME_INIT_SCRIPT = `
     if (theme !== "light" && theme !== "dark") theme = "dark";
     document.documentElement.setAttribute("data-theme", theme);
   } catch (e) {}
+  try {
+    /* Returning visitors and reduced-motion users skip the intro. Flag it
+       before first paint so the server-rendered preloader never flashes. */
+    if (
+      sessionStorage.getItem("bio-intro-seen") === "1" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      document.documentElement.setAttribute("data-preloaded", "");
+    }
+  } catch (e) {}
 })();
 `;
 

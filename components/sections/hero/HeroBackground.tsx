@@ -13,10 +13,12 @@ export function HeroBackground({
   mouseX,
   mouseY,
   scrollProgress,
+  ready,
 }: {
   mouseX: MotionValue<number>;
   mouseY: MotionValue<number>;
   scrollProgress: MotionValue<number>;
+  ready: boolean;
 }) {
   const springX = useSpring(mouseX, { stiffness: 38, damping: 22, mass: 1.2 });
   const springY = useSpring(mouseY, { stiffness: 38, damping: 22, mass: 1.2 });
@@ -83,7 +85,7 @@ export function HeroBackground({
             strokeOpacity="0.45"
             strokeWidth="1"
             initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
+            animate={{ pathLength: ready ? 1 : 0 }}
             transition={{ duration: 1.1, delay: 0.7 + i * 0.16, ease: EASE_EXPO }}
           />
         ))}
@@ -100,10 +102,10 @@ export function HeroBackground({
             cy={cy}
             fill="var(--accent-2)"
             initial={{ r: 0, opacity: 0 }}
-            animate={{ r: [3, 5, 3], opacity: [0.35, 1, 0.35] }}
+            animate={ready ? { r: [3, 5, 3], opacity: [0.35, 1, 0.35] } : { r: 0, opacity: 0 }}
             transition={{
-              r: { duration: 5, repeat: Infinity, delay: i * 0.6, ease: "easeInOut" },
-              opacity: { duration: 5, repeat: Infinity, delay: i * 0.6, ease: "easeInOut" },
+              r: { duration: 5, repeat: Infinity, delay: 1 + i * 0.6, ease: "easeInOut" },
+              opacity: { duration: 5, repeat: Infinity, delay: 1 + i * 0.6, ease: "easeInOut" },
             }}
           />
         ))}
@@ -113,7 +115,7 @@ export function HeroBackground({
       <motion.div
         style={{ y: fastY, rotate: helixRotate }}
         initial={{ opacity: 0, x: 40 }}
-        animate={{ opacity: 0.32, x: 0 }}
+        animate={ready ? { opacity: 0.32, x: 0 } : { opacity: 0, x: 40 }}
         transition={{ duration: 1.4, delay: 0.5, ease: EASE_EXPO }}
         className="absolute right-16 top-24 hidden lg:block"
       >

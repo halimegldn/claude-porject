@@ -20,6 +20,7 @@ import { Notes } from "@/components/sections/Notes";
 import { Quote } from "@/components/sections/Quote";
 import { Stats } from "@/components/sections/Stats";
 import { getReducedMotion, getServerReducedMotion, subscribeReducedMotion } from "@/lib/hooks";
+import { IntroContext } from "@/lib/intro";
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                                */
@@ -65,28 +66,30 @@ export default function Home() {
         {loading && <Preloader key="preloader" onDone={() => setLoading(false)} />}
       </AnimatePresence>
 
-      <main className="relative overflow-x-clip bg-background text-foreground">
-        <div className="aurora" />
-        <div className="noise-overlay" />
-        <ScrollProgress />
-        <CursorGlow />
-        <CustomCursor />
-        <FloatingNav />
-        <SectionRail />
-        <BackToTop />
-        <div className="relative z-10">
-          <Hero />
-          <Marquee />
-          <Branches />
-          <About />
-          <CellVisual />
-          <Notes />
-          <Stats />
-          <Quote />
-          <Contact />
-          <Footer />
-        </div>
-      </main>
+      <IntroContext value={!loading}>
+        <main className="relative overflow-x-clip bg-background text-foreground">
+          <div className="aurora" />
+          <div className="noise-overlay" />
+          <ScrollProgress />
+          <CursorGlow />
+          <CustomCursor />
+          <FloatingNav />
+          <SectionRail />
+          <BackToTop />
+          <div className="relative z-10">
+            <Hero />
+            <Marquee />
+            <Branches />
+            <About />
+            <CellVisual />
+            <Notes />
+            <Stats />
+            <Quote />
+            <Contact />
+            <Footer />
+          </div>
+        </main>
+      </IntroContext>
     </MotionConfig>
   );
 }

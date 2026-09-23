@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useRef } from "react";
+import { motion, animate } from "framer-motion";
 import { Dna } from "lucide-react";
 import { EASE_EXPO } from "@/lib/motion";
 
@@ -10,26 +10,33 @@ import { EASE_EXPO } from "@/lib/motion";
 /* ------------------------------------------------------------------ */
 
 export function Preloader({ onDone }: { onDone: () => void }) {
-  const [progress, setProgress] = useState(0);
+  const counterRef = useRef<HTMLSpanElement>(null);
+  const barRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    const start = performance.now();
-    const total = 1500;
-    let raf = 0;
     let done = false;
+    let settle: ReturnType<typeof setTimeout> | undefined;
     const finish = () => {
       if (done) return;
       done = true;
       onDone();
     };
-    const tick = (now: number) => {
-      /* Ease the counter out so it decelerates into 100 like a real load. */
-      const t = Math.min((now - start) / total, 1);
-      setProgress(Math.round((1 - Math.pow(1 - t, 3)) * 100));
-      if (t < 1) raf = requestAnimationFrame(tick);
-      else setTimeout(finish, 260);
-    };
-    raf = requestAnimationFrame(tick);
+
+    /* The counter writes straight to the DOM — sixty re-renders a second
+       for a number nobody reads twice is wasted work. Cubic-out so it
+       decelerates into 100 like a real load. */
+    const controls = animate(0, 100, {
+      duration: 1.5,
+      ease: [0.33, 1, 0.68, 1],
+      onUpdate: (v) => {
+        const n = Math.round(v);
+        if (counterRef.current) counterRef.current.textContent = String(n).padStart(3, "0");
+        if (barRef.current) barRef.current.style.transform = `scaleX(${v / 100})`;
+      },
+      onComplete: () => {
+        settle = setTimeout(finish, 260);
+      },
+    });
 
     /* Safety net: the counter rides requestAnimationFrame, which a paused
        compositor can stall indefinitely. Nothing may ever leave the visitor
@@ -37,14 +44,15 @@ export function Preloader({ onDone }: { onDone: () => void }) {
     const failsafe = setTimeout(finish, 4000);
 
     return () => {
-      cancelAnimationFrame(raf);
+      controls.stop();
+      clearTimeout(settle);
       clearTimeout(failsafe);
     };
   }, [onDone]);
 
   return (
     <motion.div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-background"
+      className="preloader fixed inset-0 z-[100] flex items-center justify-center bg-background"
       exit={{ opacity: 0, transition: { duration: 0.4, delay: 0.55 } }}
     >
       {/* two curtains that part upward/downward on exit */}
@@ -59,30 +67,50 @@ export function Preloader({ onDone }: { onDone: () => void }) {
 
       <motion.div
         className="relative flex flex-col items-center gap-6"
-        exit={{ opacity: 0, y: -18, filter: "blur(8px)", transition: { duration: 0.4 } }}
+        initial={{ opacity: 0, scale: 0.92, filter: "blur(8px)" }}
+        animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+        transition={{ duration: 0.7, ease: EASE_EXPO }}
+        exit={{ opacity: 0, y: -18, scale: 1.04, filter: "blur(8px)", transition: { duration: 0.4 } }}
       >
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 3.4, repeat: Infinity, ease: "linear" }}
-          className="text-accent"
-        >
-          <Dna size={34} strokeWidth={1.4} />
-        </motion.div>
+        <div className="relative">
+          <motion.span
+            animate={{ scale: [1, 1.6, 1], opacity: [0.35, 0, 0.35] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
+            className="absolute inset-0 rounded-full bg-accent/40 blur-md"
+          />
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 3.4, repeat: Infinity, ease: "linear" }}
+            className="relative text-accent"
+          >
+            <Dna size={34} strokeWidth={1.4} />
+          </motion.div>
+        </div>
 
         <div className="flex items-baseline gap-1 font-medium tracking-tight text-2xl">
           <span className="shimmer-text">BIO</span>
-          <span className="text-accent">.</span>
+          <motion.span
+            animate={{ opacity: [1, 0.2, 1] }}
+            transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
+            className="text-accent"
+          >
+            .
+          </motion.span>
         </div>
 
         <div className="relative h-px w-44 overflow-hidden bg-foreground/10">
-          <motion.span
-            className="absolute inset-y-0 left-0 bg-gradient-to-r from-accent to-accent-2-light"
-            style={{ width: `${progress}%` }}
+          <span
+            ref={barRef}
+            style={{ transform: "scaleX(0)" }}
+            className="absolute inset-0 origin-left bg-gradient-to-r from-accent to-accent-2-light"
           />
         </div>
 
-        <span className="font-mono text-[11px] tabular-nums tracking-[0.3em] text-foreground/40">
-          {String(progress).padStart(3, "0")}
+        <span
+          ref={counterRef}
+          className="font-mono text-[11px] tabular-nums tracking-[0.3em] text-foreground/40"
+        >
+          000
         </span>
       </motion.div>
     </motion.div>

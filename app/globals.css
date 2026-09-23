@@ -309,6 +309,45 @@ html.has-custom-cursor textarea {
   cursor: text !important;
 }
 
+/* The init script flags returning visitors before React loads, so the
+   server-rendered preloader is hidden from the very first paint. */
+html[data-preloaded] .preloader {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Marquee — pure CSS loop (the list is doubled and shifted -50%).    */
+/*  Hovering the strip pauses it so a topic can actually be read.      */
+/* ------------------------------------------------------------------ */
+
+.marquee-track {
+  animation: marquee-x 52s linear infinite;
+}
+
+.marquee-track[data-reverse] {
+  animation-direction: reverse;
+  animation-duration: 64s;
+}
+
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes marquee-x {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* Hollow display text for alternating marquee items. */
+.text-outline {
+  color: transparent;
+  -webkit-text-stroke: 1px color-mix(in srgb, var(--foreground) 32%, transparent);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Focus — keyboard users get a ring that matches the site's easing   */
 /*  language; pointer users never see it.                              */
